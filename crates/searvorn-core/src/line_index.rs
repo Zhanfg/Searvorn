@@ -130,7 +130,7 @@ impl SparseLineIndex {
                 }
 
                 self.next_line = self.next_line.saturating_add(1);
-                if self.next_line % u64::from(self.stride) == 0 {
+                if self.next_line.is_multiple_of(u64::from(self.stride)) {
                     self.checkpoints.push(LineCheckpoint {
                         line: self.next_line,
                         offset: chunk_start + index as u64 + 1,
