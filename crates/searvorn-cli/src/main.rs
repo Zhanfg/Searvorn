@@ -212,13 +212,7 @@ fn hex_dump(
     let rows = length.div_ceil(layout.bytes_per_row());
     let mut buffer = vec![0u8; rows.saturating_mul(layout.bytes_per_row())];
     let mut reader = backend.open_read(path)?;
-    let window = read_hex_rows_into(
-        reader.as_mut(),
-        layout,
-        first_row,
-        rows,
-        &mut buffer,
-    )?;
+    let window = read_hex_rows_into(reader.as_mut(), layout, first_row, rows, &mut buffer)?;
 
     let bytes = &buffer[..window.bytes_read];
     for (row_index, row) in bytes.chunks(layout.bytes_per_row()).enumerate() {
