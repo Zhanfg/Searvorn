@@ -183,10 +183,7 @@ fn find_eocd(tail: &[u8]) -> Result<usize> {
             continue;
         }
 
-        let comment_len = usize::from(u16::from_le_bytes([
-            tail[index + 20],
-            tail[index + 21],
-        ]));
+        let comment_len = usize::from(u16::from_le_bytes([tail[index + 20], tail[index + 21]]));
 
         if index + EOCD_MIN_LEN + comment_len == tail.len() {
             return Ok(index);
@@ -239,11 +236,7 @@ fn u32_at(bytes: &[u8], offset: usize) -> Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::{scan_zip, ZipEntry};
-    use crate::{
-        error::Result,
-        vfs::RandomRead,
-        ErrorKind,
-    };
+    use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader {
         bytes: Vec<u8>,
