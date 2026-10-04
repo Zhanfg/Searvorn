@@ -1,3 +1,4 @@
+pub mod apk;
 pub mod capability;
 pub mod error;
 pub mod journal;
