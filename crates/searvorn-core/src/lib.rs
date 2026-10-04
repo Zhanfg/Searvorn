@@ -1,5 +1,6 @@
 pub mod apk;
 pub mod capability;
+pub mod edit;
 pub mod error;
 pub mod journal;
 pub mod local_fs;
