@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
+    apk_signing::inspect_signing_block,
     error::Result,
     vfs::RandomRead,
     zip::{scan_zip, ZipEntry},
@@ -18,6 +19,9 @@ pub struct ApkSummary {
     pub resource_entries: u32,
     pub meta_inf_entries: u32,
     pub v1_signature_files: u32,
+    pub has_v2_signing: bool,
+    pub has_v3_signing: bool,
+    pub has_v31_signing: bool,
 }
 
 pub fn inspect_apk<R>(reader: &mut R) -> Result<ApkSummary>
@@ -30,8 +34,12 @@ where
         Ok(())
     })?;
 
+    let signing = inspect_signing_block(reader, zip.central_directory_offset)?;
     let mut summary = builder.finish();
     summary.total_entries = zip.entries;
+    summary.has_v2_signing = signing.has_v2;
+    summary.has_v3_signing = signing.has_v3;
+    summary.has_v31_signing = signing.has_v31;
     Ok(summary)
 }
 
