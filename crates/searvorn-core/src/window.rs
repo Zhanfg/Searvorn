@@ -11,21 +11,43 @@ pub struct WindowRead {
     pub eof: bool,
 }
 
-pub fn read_window_into<R>(
-    reader: &mut R,
-    offset: u64,
-    buffer: &mut [u8],
-) -> Result<WindowRead>
+pub fn read_window_into<R>(reader: &mut R, offset: u64, buffer: &mut [u8]) -> Result<WindowRead>
+where
+    R: RandomRead + ?Sized,
+{
+    let total_len = reader.len()?;
+    read_window_into_known_len(reader, total_len, offset, buffer)
+}
+
+pub fn read_window<R>(reader: &mut R, offset: u64, max_len: usize) -> Result<Vec<u8>>
 where
     R: RandomRead + ?Sized,
 {
     let total_len = reader.len()?;
 
     if offset > total_len {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "window.read",
-        ));
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "window.read"));
+    }
+
+    let remaining = total_len - offset;
+    let size = max_len.min(remaining.min(usize::MAX as u64) as usize);
+    let mut buffer = vec![0u8; size];
+    let outcome = read_window_into_known_len(reader, total_len, offset, &mut buffer)?;
+    buffer.truncate(outcome.read);
+    Ok(buffer)
+}
+
+fn read_window_into_known_len<R>(
+    reader: &mut R,
+    total_len: u64,
+    offset: u64,
+    buffer: &mut [u8],
+) -> Result<WindowRead>
+where
+    R: RandomRead + ?Sized,
+{
+    if offset > total_len {
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "window.read"));
     }
 
     let available = total_len - offset;
@@ -49,35 +71,10 @@ where
     })
 }
 
-pub fn read_window<R>(reader: &mut R, offset: u64, max_len: usize) -> Result<Vec<u8>>
-where
-    R: RandomRead + ?Sized,
-{
-    let total_len = reader.len()?;
-
-    if offset > total_len {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "window.read",
-        ));
-    }
-
-    let remaining = total_len - offset;
-    let size = max_len.min(remaining.min(usize::MAX as u64) as usize);
-    let mut buffer = vec![0u8; size];
-    let outcome = read_window_into(reader, offset, &mut buffer)?;
-    buffer.truncate(outcome.read);
-    Ok(buffer)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{read_window, read_window_into};
-    use crate::{
-        error::Result,
-        vfs::RandomRead,
-        ErrorKind,
-    };
+    use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct PartialReader {
         bytes: Vec<u8>,
