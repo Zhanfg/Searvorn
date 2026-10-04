@@ -15,10 +15,7 @@ pub struct HexLayout {
 impl HexLayout {
     pub fn new(bytes_per_row: usize) -> Result<Self> {
         if bytes_per_row == 0 || bytes_per_row > 256 {
-            return Err(SearvornError::new(
-                ErrorKind::InvalidInput,
-                "hex.layout",
-            ));
+            return Err(SearvornError::new(ErrorKind::InvalidInput, "hex.layout"));
         }
 
         Ok(Self { bytes_per_row })
@@ -75,10 +72,7 @@ where
         .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "hex.window"))?;
 
     if requested > MAX_HEX_WINDOW_BYTES || requested > buffer.len() {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "hex.window",
-        ));
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "hex.window"));
     }
 
     let offset = layout.offset_for_row(first_row)?;
@@ -106,10 +100,7 @@ pub fn absolute_offset(
     column: usize,
 ) -> Result<u64> {
     if column >= layout.bytes_per_row() {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "hex.offset",
-        ));
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "hex.offset"));
     }
 
     let row = first_row
@@ -124,8 +115,7 @@ pub fn absolute_offset(
 #[cfg(test)]
 mod tests {
     use super::{
-        absolute_offset, read_hex_rows_into, HexLayout, DEFAULT_BYTES_PER_ROW,
-        MAX_HEX_WINDOW_BYTES,
+        absolute_offset, read_hex_rows_into, HexLayout, DEFAULT_BYTES_PER_ROW, MAX_HEX_WINDOW_BYTES,
     };
     use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
@@ -164,8 +154,7 @@ mod tests {
         let layout = HexLayout::new(16).expect("layout");
         let mut buffer = [0u8; 64];
 
-        let window =
-            read_hex_rows_into(&mut reader, layout, 2, 3, &mut buffer).expect("window");
+        let window = read_hex_rows_into(&mut reader, layout, 2, 3, &mut buffer).expect("window");
 
         assert_eq!(window.byte_offset, 32);
         assert_eq!(window.bytes_read, 48);
@@ -184,7 +173,9 @@ mod tests {
     fn rejects_invalid_columns_and_oversized_windows() {
         let layout = HexLayout::new(16).expect("layout");
         assert_eq!(
-            absolute_offset(layout, 0, 0, 16).expect_err("column").kind(),
+            absolute_offset(layout, 0, 0, 16)
+                .expect_err("column")
+                .kind(),
             ErrorKind::InvalidInput
         );
 
