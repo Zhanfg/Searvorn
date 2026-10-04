@@ -3,6 +3,7 @@ pub mod capability;
 pub mod edit;
 pub mod error;
 pub mod journal;
+pub mod line_index;
 pub mod local_fs;
 pub mod operations;
 pub mod resolver;
