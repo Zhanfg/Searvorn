@@ -1,5 +1,6 @@
 use crate::{
     error::{ErrorKind, Result, SearvornError},
+    slice::ReadSlice,
     vfs::RandomRead,
     window::read_window,
 };
@@ -9,6 +10,8 @@ const CENTRAL_SIGNATURE: u32 = 0x0201_4b50;
 const EOCD_MIN_LEN: usize = 22;
 const MAX_COMMENT_LEN: usize = u16::MAX as usize;
 const CENTRAL_FIXED_LEN: usize = 46;
+const LOCAL_FIXED_LEN: usize = 30;
+const LOCAL_SIGNATURE: u32 = 0x0403_4b50;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ZipSummary {
@@ -167,6 +170,67 @@ where
     })
 }
 
+pub fn open_stored_entry<'a, R>(
+    reader: &'a mut R,
+    entry: &ZipEntry,
+) -> Result<ReadSlice<'a, R>>
+where
+    R: RandomRead + ?Sized,
+{
+    if !entry.is_stored() {
+        return Err(SearvornError::new(
+            ErrorKind::Unsupported,
+            "zip.open_stored",
+        ));
+    }
+
+    if entry.flags & 1 != 0 {
+        return Err(SearvornError::new(
+            ErrorKind::Unsupported,
+            "zip.encrypted",
+        ));
+    }
+
+    if entry.compressed_size != entry.uncompressed_size {
+        return Err(SearvornError::with_detail(
+            ErrorKind::InvalidInput,
+            "zip.open_stored",
+            "stored entry has mismatched sizes",
+        ));
+    }
+
+    let mut fixed = [0u8; LOCAL_FIXED_LEN];
+    read_exact_at(reader, entry.local_header_offset, &mut fixed)?;
+
+    if u32_at(&fixed, 0)? != LOCAL_SIGNATURE {
+        return Err(SearvornError::with_detail(
+            ErrorKind::InvalidInput,
+            "zip.local",
+            "invalid local file header signature",
+        ));
+    }
+
+    let local_flags = u16_at(&fixed, 6)?;
+    let local_method = u16_at(&fixed, 8)?;
+    if local_flags & 1 != 0 || local_method != entry.compression_method {
+        return Err(SearvornError::new(
+            ErrorKind::Unsupported,
+            "zip.local",
+        ));
+    }
+
+    let name_len = u64::from(u16_at(&fixed, 26)?);
+    let extra_len = u64::from(u16_at(&fixed, 28)?);
+    let data_offset = entry
+        .local_header_offset
+        .checked_add(LOCAL_FIXED_LEN as u64)
+        .and_then(|offset| offset.checked_add(name_len))
+        .and_then(|offset| offset.checked_add(extra_len))
+        .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.local"))?;
+
+    ReadSlice::new(reader, data_offset, entry.uncompressed_size)
+}
+
 fn find_eocd(tail: &[u8]) -> Result<usize> {
     if tail.len() < EOCD_MIN_LEN {
         return Err(SearvornError::new(ErrorKind::InvalidInput, "zip.eocd"));
@@ -235,7 +299,7 @@ fn u32_at(bytes: &[u8], offset: usize) -> Result<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{scan_zip, ZipEntry};
+    use super::{open_stored_entry, scan_zip, ZipEntry};
     use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader {
@@ -335,6 +399,31 @@ mod tests {
         assert_eq!(entries[0].compressed_size, 5);
         assert_eq!(entries[0].uncompressed_size, 5);
         assert!(entries[0].is_stored());
+    }
+
+    #[test]
+    fn opens_stored_entry_without_copying_archive() {
+        let bytes = one_file_zip();
+        let mut reader = MemoryReader {
+            bytes,
+            max_read: 7,
+        };
+        let mut found = None;
+
+        scan_zip(&mut reader, |entry| {
+            found = Some(entry.clone());
+            Ok(())
+        })
+        .expect("scan");
+
+        let entry = found.expect("entry");
+        let mut view = open_stored_entry(&mut reader, &entry).expect("entry view");
+        let mut buffer = [0u8; 8];
+        let read = view.read_at(0, &mut buffer).expect("entry read");
+
+        assert_eq!(read, 5);
+        assert_eq!(&buffer[..read], b"hello");
+        assert_eq!(view.len().expect("entry len"), 5);
     }
 
     #[test]
