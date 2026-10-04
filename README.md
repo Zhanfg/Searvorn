@@ -9,3 +9,7 @@
 - [Project Charter](docs/PROJECT_CHARTER.md)
 - [Architecture Seed](docs/ARCHITECTURE_SEED.md)
 - [Bootstrap Roadmap](docs/BOOTSTRAP_ROADMAP.md)
+
+## License
+
+Searvorn is free software licensed under **GPL-3.0-or-later**. See [LICENSE](LICENSE).
