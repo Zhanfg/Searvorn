@@ -45,10 +45,7 @@ impl CommandSpec {
         validate_field(&name, "execution.env")?;
         validate_nul_free(&value, "execution.env")?;
         if name.contains('=') {
-            return Err(SearvornError::new(
-                ErrorKind::InvalidInput,
-                "execution.env",
-            ));
+            return Err(SearvornError::new(ErrorKind::InvalidInput, "execution.env"));
         }
 
         self.env.push((name, value));
@@ -241,7 +238,10 @@ mod tests {
         assert_eq!(command.program(), "/system/bin/echo");
         assert_eq!(command.args(), ["a b", "$HOME"]);
         assert_eq!(command.cwd_path(), Some("/data/local/tmp"));
-        assert_eq!(command.environment(), [("MODE".to_owned(), "safe".to_owned())]);
+        assert_eq!(
+            command.environment(),
+            [("MODE".to_owned(), "safe".to_owned())]
+        );
     }
 
     #[test]
