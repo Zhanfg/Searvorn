@@ -187,6 +187,9 @@ fn apk_info(backend: &LocalFsBackend, path: &str) -> Result<(), Box<dyn std::err
     println!("resources={}", summary.resource_entries);
     println!("meta_inf={}", summary.meta_inf_entries);
     println!("v1_signature_files={}", summary.v1_signature_files);
+    println!("signing_v2={}", summary.has_v2_signing);
+    println!("signing_v3={}", summary.has_v3_signing);
+    println!("signing_v31={}", summary.has_v31_signing);
     Ok(())
 }
 
