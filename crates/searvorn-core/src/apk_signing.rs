@@ -94,11 +94,8 @@ where
 
         let mut header = [0u8; 12];
         read_exact_at(reader, cursor, &mut header)?;
-        let pair_len = u64::from_le_bytes(
-            header[..8]
-                .try_into()
-                .expect("pair size has fixed width"),
-        );
+        let pair_len =
+            u64::from_le_bytes(header[..8].try_into().expect("pair size has fixed width"));
 
         if pair_len < 4 {
             return Err(SearvornError::with_detail(
@@ -108,11 +105,7 @@ where
             ));
         }
 
-        let id = u32::from_le_bytes(
-            header[8..12]
-                .try_into()
-                .expect("pair ID has fixed width"),
-        );
+        let id = u32::from_le_bytes(header[8..12].try_into().expect("pair ID has fixed width"));
         let next = cursor
             .checked_add(8)
             .and_then(|offset| offset.checked_add(pair_len))
@@ -171,9 +164,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        inspect_signing_block, V2_BLOCK_ID, V31_BLOCK_ID, V3_BLOCK_ID,
-    };
+    use super::{inspect_signing_block, V2_BLOCK_ID, V31_BLOCK_ID, V3_BLOCK_ID};
     use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader(Vec<u8>);
