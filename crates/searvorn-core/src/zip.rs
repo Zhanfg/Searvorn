@@ -170,10 +170,7 @@ where
     })
 }
 
-pub fn open_stored_entry<'a, R>(
-    reader: &'a mut R,
-    entry: &ZipEntry,
-) -> Result<ReadSlice<'a, R>>
+pub fn open_stored_entry<'a, R>(reader: &'a mut R, entry: &ZipEntry) -> Result<ReadSlice<'a, R>>
 where
     R: RandomRead + ?Sized,
 {
@@ -185,10 +182,7 @@ where
     }
 
     if entry.flags & 1 != 0 {
-        return Err(SearvornError::new(
-            ErrorKind::Unsupported,
-            "zip.encrypted",
-        ));
+        return Err(SearvornError::new(ErrorKind::Unsupported, "zip.encrypted"));
     }
 
     if entry.compressed_size != entry.uncompressed_size {
@@ -213,10 +207,7 @@ where
     let local_flags = u16_at(&fixed, 6)?;
     let local_method = u16_at(&fixed, 8)?;
     if local_flags & 1 != 0 || local_method != entry.compression_method {
-        return Err(SearvornError::new(
-            ErrorKind::Unsupported,
-            "zip.local",
-        ));
+        return Err(SearvornError::new(ErrorKind::Unsupported, "zip.local"));
     }
 
     let name_len = u64::from(u16_at(&fixed, 26)?);
@@ -404,10 +395,7 @@ mod tests {
     #[test]
     fn opens_stored_entry_without_copying_archive() {
         let bytes = one_file_zip();
-        let mut reader = MemoryReader {
-            bytes,
-            max_read: 7,
-        };
+        let mut reader = MemoryReader { bytes, max_read: 7 };
         let mut found = None;
 
         scan_zip(&mut reader, |entry| {
