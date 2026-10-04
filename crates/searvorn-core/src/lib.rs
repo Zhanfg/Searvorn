@@ -10,6 +10,7 @@ pub mod operations;
 pub mod resolver;
 pub mod slice;
 pub mod task;
+pub mod text;
 pub mod transfer;
 pub mod vfs;
 pub mod window;
