@@ -365,7 +365,7 @@ mod tests {
         let read = buffer.read_into(&mut reader, 2, &mut out).expect("read");
 
         assert_eq!(read, 6);
-        assert_eq!(&out, b"cdXYZ e".as_slice());
+        assert_eq!(&out, b"cdXYZe");
     }
 
     #[test]
