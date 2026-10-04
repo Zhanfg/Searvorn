@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/searvorn-core"]
+members = [
+    "crates/searvorn-core",
+    "crates/searvorn-cli",
+    "crates/searvorn-bench",
+]
 resolver = "2"
 
 [workspace.package]

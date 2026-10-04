@@ -1,0 +1,22 @@
+name: core
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+
+      - name: Check
+        run: ./scripts/check.sh

@@ -3,5 +3,19 @@
 version = 4
 
 [[package]]
+name = "searvorn-bench"
+version = "0.0.1"
+dependencies = [
+ "searvorn-core",
+]
+
+[[package]]
+name = "searvorn-cli"
+version = "0.0.1"
+dependencies = [
+ "searvorn-core",
+]
+
+[[package]]
 name = "searvorn-core"
 version = "0.0.1"
