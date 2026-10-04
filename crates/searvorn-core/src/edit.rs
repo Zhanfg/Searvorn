@@ -149,7 +149,11 @@ impl EditBuffer {
 
             match piece.source {
                 PieceSource::Original => {
-                    read_exact_at(original, source_offset, &mut buffer[written..written + count])?;
+                    read_exact_at(
+                        original,
+                        source_offset,
+                        &mut buffer[written..written + count],
+                    )?;
                 }
                 PieceSource::Added => {
                     let start = usize::try_from(source_offset)
@@ -178,10 +182,7 @@ impl EditBuffer {
 
     fn validate_range(&self, range: &Range<u64>) -> Result<()> {
         if range.start > range.end || range.end > self.len {
-            Err(SearvornError::new(
-                ErrorKind::InvalidInput,
-                "edit.range",
-            ))
+            Err(SearvornError::new(ErrorKind::InvalidInput, "edit.range"))
         } else {
             Ok(())
         }
@@ -239,8 +240,7 @@ impl EditBuffer {
 
             if write != 0 {
                 let previous = self.pieces[write - 1];
-                if previous.source == piece.source
-                    && previous.offset + previous.len == piece.offset
+                if previous.source == piece.source && previous.offset + previous.len == piece.offset
                 {
                     self.pieces[write - 1].len += piece.len;
                     continue;
