@@ -3,7 +3,7 @@
 ## Phase 0 — Foundations
 
 - establish repository conventions and reproducible local build
-- select the project license
+- [x] select the project license — GPL-3.0-or-later
 - define capability identifiers and backend contracts
 - define VFS handle and error model
 - define transaction/journal model
