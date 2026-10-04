@@ -67,8 +67,7 @@ impl ApkSummaryBuilder {
             self.summary.meta_inf_entries = self.summary.meta_inf_entries.saturating_add(1);
 
             if is_v1_signature_file(name) {
-                self.summary.v1_signature_files =
-                    self.summary.v1_signature_files.saturating_add(1);
+                self.summary.v1_signature_files = self.summary.v1_signature_files.saturating_add(1);
             }
         }
 
@@ -111,15 +110,12 @@ fn native_library_abi(name: &[u8]) -> Option<&str> {
 }
 
 fn is_v1_signature_file(name: &[u8]) -> bool {
-    let upper = name
-        .iter()
-        .map(u8::to_ascii_uppercase)
-        .collect::<Vec<u8>>();
-
-    upper.ends_with(b".SF")
-        || upper.ends_with(b".RSA")
-        || upper.ends_with(b".DSA")
-        || upper.ends_with(b".EC")
+    [b".SF".as_slice(), b".RSA", b".DSA", b".EC"]
+        .into_iter()
+        .any(|suffix| {
+            name.len() >= suffix.len()
+                && name[name.len() - suffix.len()..].eq_ignore_ascii_case(suffix)
+        })
 }
 
 #[cfg(test)]
