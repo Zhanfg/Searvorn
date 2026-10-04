@@ -91,18 +91,12 @@ where
     R: RandomRead + ?Sized,
 {
     if max_bytes > MAX_UTF8_WINDOW_BYTES {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "text.window",
-        ));
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "text.window"));
     }
 
     let total_len = reader.len()?;
     if requested_offset > total_len {
-        return Err(SearvornError::new(
-            ErrorKind::InvalidInput,
-            "text.window",
-        ));
+        return Err(SearvornError::new(ErrorKind::InvalidInput, "text.window"));
     }
 
     if requested_offset == total_len || max_bytes == 0 {
