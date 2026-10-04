@@ -1,4 +1,5 @@
 pub mod apk;
+pub mod apk_signing;
 pub mod capability;
 pub mod edit;
 pub mod error;
