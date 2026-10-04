@@ -111,9 +111,7 @@ impl SparseLineIndex {
             check_cancelled(cancellation)?;
 
             let remaining = target - self.scanned_to;
-            let requested = scratch
-                .len()
-                .min(remaining.min(usize::MAX as u64) as usize);
+            let requested = scratch.len().min(remaining.min(usize::MAX as u64) as usize);
             let read = reader.read_at(self.scanned_to, &mut scratch[..requested])?;
 
             if read == 0 {
@@ -183,9 +181,7 @@ impl SparseLineIndex {
 
         while offset < self.scanned_to {
             let remaining = self.scanned_to - offset;
-            let requested = scratch
-                .len()
-                .min(remaining.min(usize::MAX as u64) as usize);
+            let requested = scratch.len().min(remaining.min(usize::MAX as u64) as usize);
             let read = reader.read_at(offset, &mut scratch[..requested])?;
 
             if read == 0 {
@@ -240,12 +236,7 @@ fn check_cancelled(cancellation: Option<&CancellationFlag>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::SparseLineIndex;
-    use crate::{
-        error::Result,
-        task::CancellationFlag,
-        vfs::RandomRead,
-        ErrorKind,
-    };
+    use crate::{error::Result, task::CancellationFlag, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader {
         bytes: Vec<u8>,
@@ -319,7 +310,9 @@ mod tests {
         let mut index = SparseLineIndex::with_default_stride(3);
         reader.bytes.push(b'c');
 
-        let error = index.advance(&mut reader, 4, None).expect_err("must conflict");
+        let error = index
+            .advance(&mut reader, 4, None)
+            .expect_err("must conflict");
         assert_eq!(error.kind(), ErrorKind::Conflict);
     }
 
