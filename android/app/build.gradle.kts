@@ -6,16 +6,17 @@ val searvornNdkVersion = "29.0.14206865"
 val repositoryRoot = rootProject.projectDir.parentFile
 val generatedJniLibs = layout.buildDirectory.dir("generated/jniLibs")
 val skipNative = providers.gradleProperty("searvornSkipNative").isPresent
+val androidSdkLevel = providers.gradleProperty("searvornSdkLevel").orNull?.toInt() ?: 37
 
 android {
     namespace = "cc.axymorrsen.searvorn"
-    compileSdk = 37
+    compileSdk = androidSdkLevel
     ndkVersion = searvornNdkVersion
 
     defaultConfig {
         applicationId = "cc.axymorrsen.searvorn"
         minSdk = 26
-        targetSdk = 37
+        targetSdk = androidSdkLevel
         versionCode = 1
         versionName = "0.0.1"
     }
