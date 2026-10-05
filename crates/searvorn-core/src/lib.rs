@@ -1,3 +1,6 @@
+#[cfg(target_os = "android")]
+mod android_bridge;
+
 pub mod apk;
 pub mod apk_signing;
 pub mod capability;
