@@ -7,7 +7,9 @@ use std::{
 
 use searvorn_core::{
     apk::inspect_apk,
+    apk_signing::{signing_certificates, ApkSigningScheme},
     hex::{read_hex_rows_into, HexLayout},
+    sha256::format_hex,
     text::{probe_text_default, TextEncoding},
     vfs::{NodeType, VfsBackend},
     zip::scan_zip,
@@ -190,6 +192,19 @@ fn apk_info(backend: &LocalFsBackend, path: &str) -> Result<(), Box<dyn std::err
     println!("signing_v2={}", summary.has_v2_signing);
     println!("signing_v3={}", summary.has_v3_signing);
     println!("signing_v31={}", summary.has_v31_signing);
+
+    let zip = searvorn_core::zip::scan_zip(reader.as_mut(), |_| Ok(()))?;
+    let certificates = signing_certificates(reader.as_mut(), zip.central_directory_offset)?;
+    for certificate in certificates {
+        println!(
+            "certificate={} signer={} chain={} sha256={}",
+            signing_scheme_name(certificate.scheme),
+            certificate.signer_index,
+            certificate.certificate_index,
+            format_hex(&certificate.sha256)
+        );
+    }
+
     Ok(())
 }
 
@@ -261,5 +276,13 @@ fn type_name(node_type: NodeType) -> &'static str {
         NodeType::Directory => "dir",
         NodeType::Symlink => "link",
         NodeType::Other => "other",
+    }
+}
+
+fn signing_scheme_name(scheme: ApkSigningScheme) -> &'static str {
+    match scheme {
+        ApkSigningScheme::V2 => "v2",
+        ApkSigningScheme::V3 => "v3",
+        ApkSigningScheme::V31 => "v3.1",
     }
 }
