@@ -31,8 +31,19 @@ jobs:
       - name: Ensure Android 17 SDK
         shell: bash
         run: |
-          if [ ! -d "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
-            yes | sdkmanager "platforms;android-37" >/dev/null
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -perm -u+x | head -n 1)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "sdkmanager not found under $SDK_ROOT" >&2
+            exit 2
+          fi
+          if [ ! -d "$SDK_ROOT/platforms/android-37" ]; then
+            set +o pipefail
+            yes | "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0" >/dev/null
+            set -o pipefail
           fi
 
       - name: Assemble smoke APK
