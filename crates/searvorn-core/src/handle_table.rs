@@ -1,6 +1,4 @@
-use crate::{
-    error::{ErrorKind, Result, SearvornError},
-};
+use crate::error::{ErrorKind, Result, SearvornError};
 
 const FREE_NONE: u32 = u32::MAX;
 const MAX_GENERATION: u32 = 0x7fff_ffff;
