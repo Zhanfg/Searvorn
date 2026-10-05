@@ -119,16 +119,9 @@ where
         ApkSigningScheme::V3,
         ApkSigningScheme::V2,
     ] {
-        if let Some((value_offset, value_len)) =
-            find_pair_value(reader, bounds, scheme.block_id())?
+        if let Some((value_offset, value_len)) = find_pair_value(reader, bounds, scheme.block_id())?
         {
-            parse_scheme_certificates(
-                reader,
-                scheme,
-                value_offset,
-                value_len,
-                &mut certificates,
-            )?;
+            parse_scheme_certificates(reader, scheme, value_offset, value_len, &mut certificates)?;
         }
     }
 
@@ -152,21 +145,24 @@ where
     let mut signer_index = 0u32;
 
     while signer_cursor < signers_end {
-        let (signer_offset, signer_len) =
-            read_length_prefixed(reader, signer_cursor, signers_end)?;
+        let (signer_offset, signer_len) = read_length_prefixed(reader, signer_cursor, signers_end)?;
         let signer_end = checked_end(signer_offset, signer_len, "apk_signing.signer")?;
 
         let (signed_data_offset, signed_data_len) =
             read_length_prefixed(reader, signer_offset, signer_end)?;
-        let signed_data_end =
-            checked_end(signed_data_offset, signed_data_len, "apk_signing.signed_data")?;
+        let signed_data_end = checked_end(
+            signed_data_offset,
+            signed_data_len,
+            "apk_signing.signed_data",
+        )?;
 
-        let (_, digests_len) =
-            read_length_prefixed(reader, signed_data_offset, signed_data_end)?;
+        let (_, digests_len) = read_length_prefixed(reader, signed_data_offset, signed_data_end)?;
         let certificates_field = signed_data_offset
             .checked_add(4)
             .and_then(|offset| offset.checked_add(digests_len))
-            .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "apk_signing.certificates"))?;
+            .ok_or_else(|| {
+                SearvornError::new(ErrorKind::InvalidInput, "apk_signing.certificates")
+            })?;
 
         let (certificates_offset, certificates_len) =
             read_length_prefixed(reader, certificates_field, signed_data_end)?;
@@ -299,8 +295,7 @@ where
 
     let mut header = [0u8; 12];
     read_exact_at(reader, cursor, &mut header)?;
-    let pair_len =
-        u64::from_le_bytes(header[..8].try_into().expect("pair size has fixed width"));
+    let pair_len = u64::from_le_bytes(header[..8].try_into().expect("pair size has fixed width"));
 
     if pair_len < 4 {
         return Err(SearvornError::with_detail(
