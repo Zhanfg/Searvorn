@@ -9,14 +9,18 @@ NDK_VERSION="${SEARVORN_NDK_VERSION:-29.0.14206865}"
 OUT="${SEARVORN_ANDROID_OUT:-$ROOT/android/app/build/generated/jniLibs}"
 
 find_ndk() {
-    if [ -n "${ANDROID_NDK_HOME:-}" ] && [ -d "$ANDROID_NDK_HOME" ]; then
-        printf '%s\n' "$ANDROID_NDK_HOME"
-        return 0
-    fi
-
     for sdk in "${ANDROID_SDK_ROOT:-}" "${ANDROID_HOME:-}"; do
         if [ -n "$sdk" ] && [ -d "$sdk/ndk/$NDK_VERSION" ]; then
             printf '%s\n' "$sdk/ndk/$NDK_VERSION"
+            return 0
+        fi
+    done
+
+    for candidate in "${ANDROID_NDK_LATEST_HOME:-}" "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}"; do
+        if [ -n "$candidate" ] &&
+            [ -d "$candidate" ] &&
+            [ "$(basename "$candidate")" = "$NDK_VERSION" ]; then
+            printf '%s\n' "$candidate"
             return 0
         fi
     done
@@ -26,8 +30,8 @@ find_ndk() {
 
 NDK_ROOT="$(find_ndk || true)"
 if [ -z "$NDK_ROOT" ]; then
-    echo "Searvorn: Android NDK $NDK_VERSION not found." >&2
-    echo "Set ANDROID_NDK_HOME or install the pinned NDK in ANDROID_SDK_ROOT/ndk/$NDK_VERSION." >&2
+    echo "Searvorn: pinned Android NDK $NDK_VERSION not found." >&2
+    echo "Install $NDK_VERSION under ANDROID_SDK_ROOT/ndk or point ANDROID_NDK_LATEST_HOME to it." >&2
     exit 2
 fi
 
@@ -53,8 +57,8 @@ if [ ! -x "$LINKER" ]; then
 fi
 
 rustup target add "$TARGET" --toolchain "$TOOLCHAIN" >/dev/null
-export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER"
 
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$LINKER"
 cargo +"$TOOLCHAIN" build \
     --manifest-path "$ROOT/Cargo.toml" \
     --package searvorn-core \
