@@ -35,7 +35,7 @@ class MainActivity : Activity() {
         }
 
         safTree = SafTree(this)
-        homeView = HomeView(this, ::selectFileTree)
+        homeView = HomeView(this, ::selectFileTree, ::selectBinaryFile)
         setContentView(homeView)
     }
 
@@ -43,20 +43,26 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode != REQUEST_TREE || resultCode != RESULT_OK) {
+        if (resultCode != RESULT_OK) {
             return
         }
 
-        val treeUri = data?.data ?: return
+        val uri = data?.data ?: return
         val flags = data.flags
-        homeView.setFilesStatus("Opening…")
+        when (requestCode) {
+            REQUEST_TREE -> openTree(uri, flags)
+            REQUEST_FILE -> openBinaryFile(uri, flags)
+        }
+    }
 
+    private fun openTree(uri: android.net.Uri, flags: Int) {
+        homeView.setFilesStatus("Opening…")
         Thread(
             {
                 val status =
                     runCatching {
-                        safTree.persist(treeUri, flags)
-                        val snapshot = safTree.snapshot(treeUri)
+                        safTree.persist(uri, flags)
+                        val snapshot = safTree.snapshot(uri)
                         val suffix = if (snapshot.truncated) "+" else ""
                         "${snapshot.rootName} · ${snapshot.entries}$suffix entries"
                     }.getOrElse {
@@ -67,22 +73,54 @@ class MainActivity : Activity() {
                     homeView.setFilesStatus(status)
                 }
             },
-            "Searvorn-SAF",
+            "Searvorn-SAF-Tree",
         ).start()
     }
 
+    private fun openBinaryFile(uri: android.net.Uri, flags: Int) {
+        homeView.setBinaryStatus("Opening…")
+        Thread(
+            {
+                val status =
+                    runCatching {
+                        safTree.persist(uri, flags)
+                        val name = safTree.displayName(uri)
+                        val fd = safTree.detachReadFd(uri)
+                        val len = NativeCore.consumeDetachedFdLength(fd)
+                        if (len >= 0) {
+                            "$name · $len bytes · native"
+                        } else {
+                            "$name · native unavailable"
+                        }
+                    }.getOrElse {
+                        "Unable to open selected file"
+                    }
+
+                runOnUiThread {
+                    homeView.setBinaryStatus(status)
+                }
+            },
+            "Searvorn-SAF-File",
+        ).start()
+    }
     private fun selectFileTree() {
         startActivityForResult(safTree.pickerIntent(), REQUEST_TREE)
     }
 
+    private fun selectBinaryFile() {
+        startActivityForResult(safTree.filePickerIntent(), REQUEST_FILE)
+    }
+
     private companion object {
         const val REQUEST_TREE = 0x5301
+        const val REQUEST_FILE = 0x5302
     }
 }
 
 private class HomeView(
     context: Context,
     private val onFilesClick: () -> Unit,
+    private val onBinaryClick: () -> Unit,
 ) : View(context) {
     private val density = resources.displayMetrics.density
     private val night =
@@ -97,9 +135,11 @@ private class HomeView(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val card = RectF()
     private val filesCard = RectF()
+    private val binaryCard = RectF()
     private var insetTop = 0
     private var insetBottom = 0
     private var filesStatus = "Choose a document tree"
+    private var binaryStatus = "Choose a file"
 
     init {
         isClickable = true
@@ -127,11 +167,25 @@ private class HomeView(
         invalidate()
     }
 
+    fun setBinaryStatus(status: String) {
+        binaryStatus = status
+        invalidate()
+    }
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP && filesCard.contains(event.x, event.y)) {
-            performClick()
-            onFilesClick()
-            return true
+        if (event.action == MotionEvent.ACTION_UP) {
+            when {
+                filesCard.contains(event.x, event.y) -> {
+                    performClick()
+                    onFilesClick()
+                    return true
+                }
+                binaryCard.contains(event.x, event.y) -> {
+                    performClick()
+                    onBinaryClick()
+                    return true
+                }
+            }
         }
         return true
     }
@@ -169,12 +223,8 @@ private class HomeView(
 
         filesCard.set(left, y, left + column, y + dp(104f))
         drawFeatureCard(canvas, "Files", filesStatus, filesCard)
-        drawFeatureCard(
-            canvas,
-            "Binary",
-            "APK · DEX · ELF",
-            RectF(left + column + gap, y, left + column * 2 + gap, y + dp(104f)),
-        )
+        binaryCard.set(left + column + gap, y, left + column * 2 + gap, y + dp(104f))
+        drawFeatureCard(canvas, "Binary", binaryStatus, binaryCard)
         y += dp(104f) + gap
         drawFeatureCard(
             canvas,
