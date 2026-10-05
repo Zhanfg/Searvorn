@@ -1,0 +1,75 @@
+name: android-full
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev/bootstrap
+    paths:
+      - ".github/workflows/android-full.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-full-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm64-debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle 9.6
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Rust 1.99
+        run: rustup toolchain install 1.99.0 --profile minimal
+
+      - name: Select installed Android SDK and pinned NDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDK_LEVEL="$(
+            find "$SDK_ROOT/platforms" -maxdepth 1 -type d -name "android-*" -printf "%f\n" |
+              sed "s/^android-//" |
+              grep -E "^[0-9]+$" |
+              sort -n |
+              tail -n 1
+          )"
+          test -n "$SDK_LEVEL"
+          test -d "$SDK_ROOT/ndk/29.0.14206865"
+          echo "SDK_LEVEL=$SDK_LEVEL" >> "$GITHUB_ENV"
+          echo "SEARVORN_NDK_VERSION=29.0.14206865" >> "$GITHUB_ENV"
+          echo "Smoke platform: API $SDK_LEVEL; native NDK: 29.0.14206865"
+
+      - name: Assemble JNI APK
+        run: gradle -p android :app:assembleDebug -PsearvornSdkLevel="$SDK_LEVEL" --no-daemon --stacktrace
+
+      - name: Verify native payload
+        shell: bash
+        run: |
+          APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          SO="android/app/build/generated/jniLibs/arm64-v8a/libsearvorn_core.so"
+          NDK="$ANDROID_SDK_ROOT/ndk/29.0.14206865"
+          test -f "$APK"
+          test -f "$SO"
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libsearvorn_core.so"
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D "$SO" |
+            grep -q "Java_cc_axymorrsen_searvorn_NativeCore_nativeAbiVersion"
+          "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm" -D "$SO" |
+            grep -q "Java_cc_axymorrsen_searvorn_NativeCore_nativeAdoptFd"
+          echo "JNI payload verified"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: searvorn-debug-arm64
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
