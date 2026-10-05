@@ -254,7 +254,7 @@ mod tests {
         let window = read_utf8_window(&mut reader, 2, 4).expect("window");
 
         assert_eq!(window.byte_offset, 1);
-        assert_eq!(window.as_str(), "€");
+        assert_eq!(window.as_str(), "€B");
     }
 
     #[test]
