@@ -155,8 +155,10 @@ impl Sha256 {
     fn compress(&mut self, block: &[u8; 64]) {
         let mut w = [0u32; 64];
 
-        for (index, chunk) in block.chunks_exact(4).take(16).enumerate() {
-            w[index] = u32::from_be_bytes(chunk.try_into().expect("chunk is four bytes"));
+        let (words, remainder) = block.as_chunks::<4>();
+        debug_assert!(remainder.is_empty());
+        for (index, chunk) in words.iter().enumerate() {
+            w[index] = u32::from_be_bytes(*chunk);
         }
 
         for index in 16..64 {
