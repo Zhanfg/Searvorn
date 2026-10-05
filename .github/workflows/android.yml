@@ -28,23 +28,23 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
-      - name: Ensure Android 17 SDK
+      - name: Select installed Android SDK
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -perm -u+x | head -n 1)"
-          fi
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "sdkmanager not found under $SDK_ROOT" >&2
+          SDK_LEVEL="$(
+            find "$SDK_ROOT/platforms" -maxdepth 1 -type d -name "android-*" -printf "%f\n" |
+              sed "s/^android-//" |
+              grep -E "^[0-9]+$" |
+              sort -n |
+              tail -n 1
+          )"
+          if [ -z "$SDK_LEVEL" ]; then
+            echo "No installed Android platform found under $SDK_ROOT/platforms" >&2
             exit 2
           fi
-          if [ ! -d "$SDK_ROOT/platforms/android-37" ]; then
-            set +o pipefail
-            yes | "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0" >/dev/null
-            set -o pipefail
-          fi
+          echo "Using installed Android SDK $SDK_LEVEL for smoke compilation"
+          echo "SDK_LEVEL=$SDK_LEVEL" >> "$GITHUB_ENV"
 
       - name: Assemble smoke APK
-        run: gradle -p android :app:assembleDebug -PsearvornSkipNative=true --no-daemon --stacktrace
+        run: gradle -p android :app:assembleDebug -PsearvornSkipNative=true -PsearvornSdkLevel="$SDK_LEVEL" --no-daemon --stacktrace
