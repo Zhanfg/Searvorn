@@ -1,0 +1,39 @@
+name: android-smoke
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "scripts/build-android-native.sh"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle 9.6
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Ensure Android 17 SDK
+        shell: bash
+        run: |
+          if [ ! -d "$ANDROID_SDK_ROOT/platforms/android-37" ]; then
+            yes | sdkmanager "platforms;android-37" >/dev/null
+          fi
+
+      - name: Assemble smoke APK
+        run: gradle -p android :app:assembleDebug -PsearvornSkipNative=true --no-daemon --stacktrace
