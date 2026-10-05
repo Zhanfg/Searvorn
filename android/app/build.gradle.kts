@@ -5,6 +5,7 @@ plugins {
 val searvornNdkVersion = "29.0.14206865"
 val repositoryRoot = rootProject.projectDir.parentFile
 val generatedJniLibs = layout.buildDirectory.dir("generated/jniLibs")
+val skipNative = providers.gradleProperty("searvornSkipNative").isPresent
 
 android {
     namespace = "cc.axymorrsen.searvorn"
@@ -68,6 +69,8 @@ val buildRustArm64 by tasks.registering(Exec::class) {
     outputs.dir(generatedJniLibs)
 }
 
-tasks.named("preBuild") {
-    dependsOn(buildRustArm64)
+if (!skipNative) {
+    tasks.named("preBuild") {
+        dependsOn(buildRustArm64)
+    }
 }
