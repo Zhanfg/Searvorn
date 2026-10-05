@@ -27,7 +27,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDir(generatedJniLibs)
+            jniLibs.srcDir(generatedJniLibs.get().asFile)
         }
     }
 
