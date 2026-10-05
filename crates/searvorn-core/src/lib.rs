@@ -10,6 +10,7 @@ pub mod line_index;
 pub mod local_fs;
 pub mod operations;
 pub mod resolver;
+pub mod sha256;
 pub mod slice;
 pub mod task;
 pub mod text;
