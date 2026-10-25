@@ -210,12 +210,32 @@ where
         return Err(SearvornError::new(ErrorKind::Unsupported, "zip.local"));
     }
 
-    let name_len = u64::from(u16_at(&fixed, 26)?);
+    let name_len = usize::from(u16_at(&fixed, 26)?);
     let extra_len = u64::from(u16_at(&fixed, 28)?);
-    let data_offset = entry
+    if name_len != entry.name.len() {
+        return Err(SearvornError::with_detail(
+            ErrorKind::InvalidInput,
+            "zip.local",
+            "local and central directory filename lengths differ",
+        ));
+    }
+
+    let name_offset = entry
         .local_header_offset
         .checked_add(LOCAL_FIXED_LEN as u64)
-        .and_then(|offset| offset.checked_add(name_len))
+        .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.local"))?;
+    let mut local_name = vec![0u8; name_len];
+    read_exact_at(reader, name_offset, &mut local_name)?;
+    if local_name != entry.name {
+        return Err(SearvornError::with_detail(
+            ErrorKind::InvalidInput,
+            "zip.local",
+            "local and central directory filenames differ",
+        ));
+    }
+
+    let data_offset = name_offset
+        .checked_add(name_len as u64)
         .and_then(|offset| offset.checked_add(extra_len))
         .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.local"))?;
 
@@ -290,7 +310,7 @@ fn u32_at(bytes: &[u8], offset: usize) -> Result<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{open_stored_entry, scan_zip, ZipEntry};
+    use super::{open_stored_entry, scan_zip, ZipEntry, LOCAL_FIXED_LEN};
     use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader {
@@ -412,6 +432,42 @@ mod tests {
         assert_eq!(read, 5);
         assert_eq!(&buffer[..read], b"hello");
         assert_eq!(view.len().expect("entry len"), 5);
+    }
+
+    #[test]
+    fn rejects_local_filename_mismatch() {
+        let mut bytes = one_file_zip();
+        bytes[LOCAL_FIXED_LEN] = b'b';
+        let mut reader = MemoryReader { bytes, max_read: 7 };
+        let mut entry = None;
+        scan_zip(&mut reader, |found| {
+            entry = Some(found.clone());
+            Ok(())
+        })
+        .expect("scan");
+
+        let error = open_stored_entry(&mut reader, &entry.expect("entry"))
+            .err()
+            .expect("mismatched local filename must fail");
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_local_filename_length_mismatch() {
+        let mut bytes = one_file_zip();
+        bytes[26..28].copy_from_slice(&4u16.to_le_bytes());
+        let mut reader = MemoryReader { bytes, max_read: 7 };
+        let mut entry = None;
+        scan_zip(&mut reader, |found| {
+            entry = Some(found.clone());
+            Ok(())
+        })
+        .expect("scan");
+
+        let error = open_stored_entry(&mut reader, &entry.expect("entry"))
+            .err()
+            .expect("mismatched local filename length must fail");
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
 
     #[test]
