@@ -1,0 +1,50 @@
+name: android-smoke
+
+on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "scripts/build-android-native.sh"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Gradle 9.6
+        uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Select installed Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          SDK_LEVEL="$(
+            find "$SDK_ROOT/platforms" -maxdepth 1 -type d -name "android-*" -printf "%f\n" |
+              sed "s/^android-//" |
+              grep -E "^[0-9]+$" |
+              sort -n |
+              tail -n 1
+          )"
+          if [ -z "$SDK_LEVEL" ]; then
+            echo "No installed Android platform found under $SDK_ROOT/platforms" >&2
+            exit 2
+          fi
+          echo "Using installed Android SDK $SDK_LEVEL for smoke compilation"
+          echo "SDK_LEVEL=$SDK_LEVEL" >> "$GITHUB_ENV"
+
+      - name: Assemble smoke APK
+        run: gradle -p android :app:assembleDebug -PsearvornSkipNative=true -PsearvornSdkLevel="$SDK_LEVEL" --no-daemon --stacktrace
