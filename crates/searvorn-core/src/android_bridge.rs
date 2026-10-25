@@ -72,7 +72,11 @@ pub extern "system" fn Java_cc_axymorrsen_searvorn_NativeCore_nativeReleaseHandl
         return 0;
     };
 
-    if lock_handles().remove(handle).is_some() { 1 } else { 0 }
+    if lock_handles().remove(handle).is_some() {
+        1
+    } else {
+        0
+    }
 }
 
 fn lock_handles() -> MutexGuard<'static, HandleTable<File>> {
