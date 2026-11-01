@@ -37,4 +37,5 @@ APK/DEX/resource reverse engineering, Linux runtime, build tooling, security ana
 
 ## Licensing
 
-License selection is pending. A release must not be presented as fully open-source until an explicit license is committed.
+Searvorn is licensed under **GPL-3.0-or-later**; see [LICENSE](../LICENSE).
+Third-party code and assets must be reviewed for license compatibility before release.
