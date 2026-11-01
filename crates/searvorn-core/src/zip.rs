@@ -487,10 +487,7 @@ mod tests {
             u32::from_le_bytes(bytes[eocd + 12..eocd + 16].try_into().expect("size"));
         bytes[eocd + 12..eocd + 16].copy_from_slice(&(central_size + 1).to_le_bytes());
 
-        let mut reader = MemoryReader {
-            bytes,
-            max_read: 7,
-        };
+        let mut reader = MemoryReader { bytes, max_read: 7 };
         let error = scan_zip(&mut reader, |_| Ok(())).expect_err("directory overlaps EOCD");
         assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
@@ -502,10 +499,7 @@ mod tests {
         bytes[eocd + 8..eocd + 16].fill(0);
         bytes[eocd + 16..eocd + 20].copy_from_slice(&((eocd + 1) as u32).to_le_bytes());
 
-        let mut reader = MemoryReader {
-            bytes,
-            max_read: 7,
-        };
+        let mut reader = MemoryReader { bytes, max_read: 7 };
         let error = scan_zip(&mut reader, |_| Ok(())).expect_err("directory begins in EOCD");
         assert_eq!(error.kind(), ErrorKind::InvalidInput);
     }
@@ -517,10 +511,7 @@ mod tests {
         bytes[eocd + 20..eocd + 22].copy_from_slice(&4u16.to_le_bytes());
         bytes.extend_from_slice(b"note");
 
-        let mut reader = MemoryReader {
-            bytes,
-            max_read: 7,
-        };
+        let mut reader = MemoryReader { bytes, max_read: 7 };
         let summary = scan_zip(&mut reader, |_| Ok(())).expect("ZIP with comment");
         assert_eq!(summary.entries, 1);
     }
