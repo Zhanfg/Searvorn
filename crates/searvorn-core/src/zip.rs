@@ -62,6 +62,7 @@ where
     )?;
 
     let eocd_index = find_eocd(&tail)?;
+    let eocd_offset = tail_start + eocd_index as u64;
     let eocd = &tail[eocd_index..];
     let disk_number = u16_at(eocd, 4)?;
     let directory_disk = u16_at(eocd, 6)?;
@@ -89,6 +90,14 @@ where
             ErrorKind::InvalidInput,
             "zip.directory",
             "central directory exceeds file length",
+        ));
+    }
+
+    if directory_end > eocd_offset {
+        return Err(SearvornError::with_detail(
+            ErrorKind::InvalidInput,
+            "zip.directory",
+            "central directory overlaps end-of-central-directory record",
         ));
     }
 
@@ -468,6 +477,52 @@ mod tests {
             .err()
             .expect("mismatched local filename length must fail");
         assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_central_directory_overlapping_eocd() {
+        let mut bytes = one_file_zip();
+        let eocd = bytes.len() - 22;
+        let central_size =
+            u32::from_le_bytes(bytes[eocd + 12..eocd + 16].try_into().expect("size"));
+        bytes[eocd + 12..eocd + 16].copy_from_slice(&(central_size + 1).to_le_bytes());
+
+        let mut reader = MemoryReader {
+            bytes,
+            max_read: 7,
+        };
+        let error = scan_zip(&mut reader, |_| Ok(())).expect_err("directory overlaps EOCD");
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn rejects_empty_directory_offset_inside_eocd() {
+        let mut bytes = one_file_zip();
+        let eocd = bytes.len() - 22;
+        bytes[eocd + 8..eocd + 16].fill(0);
+        bytes[eocd + 16..eocd + 20].copy_from_slice(&((eocd + 1) as u32).to_le_bytes());
+
+        let mut reader = MemoryReader {
+            bytes,
+            max_read: 7,
+        };
+        let error = scan_zip(&mut reader, |_| Ok(())).expect_err("directory begins in EOCD");
+        assert_eq!(error.kind(), ErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn accepts_eocd_with_archive_comment() {
+        let mut bytes = one_file_zip();
+        let eocd = bytes.len() - 22;
+        bytes[eocd + 20..eocd + 22].copy_from_slice(&4u16.to_le_bytes());
+        bytes.extend_from_slice(b"note");
+
+        let mut reader = MemoryReader {
+            bytes,
+            max_read: 7,
+        };
+        let summary = scan_zip(&mut reader, |_| Ok(())).expect("ZIP with comment");
+        assert_eq!(summary.entries, 1);
     }
 
     #[test]
