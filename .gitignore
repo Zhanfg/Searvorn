@@ -1,0 +1,17 @@
+.idea/
+.gradle/
+build/
+**/build/
+target/
+local.properties
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local reverse-engineering samples
+samples/private/
+*.keystore
+*.jks
+*.p12
+*.pem
+*.pk8
