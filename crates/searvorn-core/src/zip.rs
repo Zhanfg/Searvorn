@@ -273,10 +273,7 @@ where
     })
 }
 
-pub fn open_stored_entry<'a, R>(
-    reader: &'a mut R,
-    entry: &ZipEntry,
-) -> Result<ZipStoredView<'a, R>>
+pub fn open_stored_entry<'a, R>(reader: &'a mut R, entry: &ZipEntry) -> Result<ZipStoredView<'a, R>>
 where
     R: RandomRead + ?Sized,
 {
@@ -659,7 +656,9 @@ mod tests {
         let mut bytes = one_file_zip();
         let eocd = bytes.len() - 22;
         let central = u32::from_le_bytes(
-            bytes[eocd + 16..eocd + 20].try_into().expect("central offset"),
+            bytes[eocd + 16..eocd + 20]
+                .try_into()
+                .expect("central offset"),
         ) as usize;
         bytes[central + 24..central + 28].copy_from_slice(&1_000_000u32.to_le_bytes());
 
@@ -705,9 +704,8 @@ mod tests {
             max_actual_read_bytes: 4,
             ..ZipLimits::default()
         };
-        let mut view =
-            open_stored_entry_with_limits(&mut reader, &entry.expect("entry"), limits)
-                .expect("entry view");
+        let mut view = open_stored_entry_with_limits(&mut reader, &entry.expect("entry"), limits)
+            .expect("entry view");
         let mut buffer = [0u8; 8];
         let count = view.read_at(0, &mut buffer).expect("bounded read");
         assert_eq!(count, 4);
