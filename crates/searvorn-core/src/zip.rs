@@ -14,6 +14,59 @@ const LOCAL_FIXED_LEN: usize = 30;
 const LOCAL_SIGNATURE: u32 = 0x0403_4b50;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ZipLimits {
+    pub max_entries: u64,
+    pub max_entry_uncompressed_bytes: u64,
+    pub max_total_uncompressed_bytes: u64,
+    pub max_actual_read_bytes: u64,
+}
+
+impl Default for ZipLimits {
+    fn default() -> Self {
+        Self {
+            max_entries: 65_535,
+            max_entry_uncompressed_bytes: 512 * 1024 * 1024,
+            max_total_uncompressed_bytes: 2 * 1024 * 1024 * 1024,
+            max_actual_read_bytes: 512 * 1024 * 1024,
+        }
+    }
+}
+
+/// An entry view that counts actual bytes returned by random-access reads.
+/// Re-reading an offset consumes the budget again.
+pub struct ZipStoredView<'a, R: RandomRead + ?Sized> {
+    slice: ReadSlice<'a, R>,
+    actual_bytes_read: u64,
+    max_actual_read_bytes: u64,
+}
+
+impl<R: RandomRead + ?Sized> RandomRead for ZipStoredView<'_, R> {
+    fn len(&self) -> Result<u64> {
+        self.slice.len()
+    }
+
+    fn read_at(&mut self, offset: u64, buffer: &mut [u8]) -> Result<usize> {
+        if buffer.is_empty() || offset >= self.slice.len()? {
+            return Ok(0);
+        }
+
+        let remaining = self.max_actual_read_bytes - self.actual_bytes_read;
+        if remaining == 0 {
+            return Err(SearvornError::with_detail(
+                ErrorKind::Unsupported,
+                "zip.read_limit",
+                "actual entry read byte budget exhausted",
+            ));
+        }
+
+        let allowed = buffer.len().min(remaining.min(usize::MAX as u64) as usize);
+        let count = self.slice.read_at(offset, &mut buffer[..allowed])?;
+        self.actual_bytes_read += count as u64;
+        Ok(count)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ZipSummary {
     pub entries: u64,
     pub central_directory_offset: u64,
@@ -45,7 +98,19 @@ impl ZipEntry {
     }
 }
 
-pub fn scan_zip<R, F>(reader: &mut R, mut visitor: F) -> Result<ZipSummary>
+pub fn scan_zip<R, F>(reader: &mut R, visitor: F) -> Result<ZipSummary>
+where
+    R: RandomRead + ?Sized,
+    F: FnMut(&ZipEntry) -> Result<()>,
+{
+    scan_zip_with_limits(reader, ZipLimits::default(), visitor)
+}
+
+pub fn scan_zip_with_limits<R, F>(
+    reader: &mut R,
+    limits: ZipLimits,
+    mut visitor: F,
+) -> Result<ZipSummary>
 where
     R: RandomRead + ?Sized,
     F: FnMut(&ZipEntry) -> Result<()>,
@@ -101,7 +166,16 @@ where
         ));
     }
 
+    if u64::from(entries) > limits.max_entries {
+        return Err(SearvornError::with_detail(
+            ErrorKind::Unsupported,
+            "zip.entry_limit",
+            "entry count exceeds configured limit",
+        ));
+    }
+
     let mut cursor = directory_offset;
+    let mut total_uncompressed = 0u64;
 
     for _ in 0..entries {
         let mut fixed = [0u8; CENTRAL_FIXED_LEN];
@@ -138,6 +212,26 @@ where
             return Err(SearvornError::new(ErrorKind::Unsupported, "zip.multidisk"));
         }
 
+        let uncompressed_size = u64::from(uncompressed_size);
+        if uncompressed_size > limits.max_entry_uncompressed_bytes {
+            return Err(SearvornError::with_detail(
+                ErrorKind::Unsupported,
+                "zip.entry_limit",
+                "declared uncompressed entry size exceeds configured limit",
+            ));
+        }
+
+        total_uncompressed = total_uncompressed
+            .checked_add(uncompressed_size)
+            .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.total_size"))?;
+        if total_uncompressed > limits.max_total_uncompressed_bytes {
+            return Err(SearvornError::with_detail(
+                ErrorKind::Unsupported,
+                "zip.total_limit",
+                "declared total uncompressed size exceeds configured limit",
+            ));
+        }
+
         let name_offset = cursor
             .checked_add(CENTRAL_FIXED_LEN as u64)
             .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.central"))?;
@@ -167,7 +261,7 @@ where
             compression_method,
             crc32,
             compressed_size: u64::from(compressed_size),
-            uncompressed_size: u64::from(uncompressed_size),
+            uncompressed_size,
             local_header_offset: u64::from(local_header_offset),
         })?;
     }
@@ -179,10 +273,29 @@ where
     })
 }
 
-pub fn open_stored_entry<'a, R>(reader: &'a mut R, entry: &ZipEntry) -> Result<ReadSlice<'a, R>>
+pub fn open_stored_entry<'a, R>(reader: &'a mut R, entry: &ZipEntry) -> Result<ZipStoredView<'a, R>>
 where
     R: RandomRead + ?Sized,
 {
+    open_stored_entry_with_limits(reader, entry, ZipLimits::default())
+}
+
+pub fn open_stored_entry_with_limits<'a, R>(
+    reader: &'a mut R,
+    entry: &ZipEntry,
+    limits: ZipLimits,
+) -> Result<ZipStoredView<'a, R>>
+where
+    R: RandomRead + ?Sized,
+{
+    if entry.uncompressed_size > limits.max_entry_uncompressed_bytes {
+        return Err(SearvornError::with_detail(
+            ErrorKind::Unsupported,
+            "zip.entry_limit",
+            "declared uncompressed entry size exceeds configured limit",
+        ));
+    }
+
     if !entry.is_stored() {
         return Err(SearvornError::new(
             ErrorKind::Unsupported,
@@ -248,7 +361,11 @@ where
         .and_then(|offset| offset.checked_add(extra_len))
         .ok_or_else(|| SearvornError::new(ErrorKind::InvalidInput, "zip.local"))?;
 
-    ReadSlice::new(reader, data_offset, entry.uncompressed_size)
+    Ok(ZipStoredView {
+        slice: ReadSlice::new(reader, data_offset, entry.uncompressed_size)?,
+        actual_bytes_read: 0,
+        max_actual_read_bytes: limits.max_actual_read_bytes,
+    })
 }
 
 fn find_eocd(tail: &[u8]) -> Result<usize> {
@@ -319,7 +436,10 @@ fn u32_at(bytes: &[u8], offset: usize) -> Result<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::{open_stored_entry, scan_zip, ZipEntry, LOCAL_FIXED_LEN};
+    use super::{
+        open_stored_entry, open_stored_entry_with_limits, scan_zip, scan_zip_with_limits, ZipEntry,
+        ZipLimits, LOCAL_FIXED_LEN,
+    };
     use crate::{error::Result, vfs::RandomRead, ErrorKind};
 
     struct MemoryReader {
@@ -514,6 +634,109 @@ mod tests {
         let mut reader = MemoryReader { bytes, max_read: 7 };
         let summary = scan_zip(&mut reader, |_| Ok(())).expect("ZIP with comment");
         assert_eq!(summary.entries, 1);
+    }
+
+    #[test]
+    fn rejects_excessive_declared_entry_count() {
+        let mut reader = MemoryReader {
+            bytes: one_file_zip(),
+            max_read: 7,
+        };
+        let limits = ZipLimits {
+            max_entries: 0,
+            ..ZipLimits::default()
+        };
+        let error = scan_zip_with_limits(&mut reader, limits, |_| Ok(()))
+            .expect_err("entry count must be bounded");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn rejects_oversized_declared_entry_size_before_reading_data() {
+        let mut bytes = one_file_zip();
+        let eocd = bytes.len() - 22;
+        let central = u32::from_le_bytes(
+            bytes[eocd + 16..eocd + 20]
+                .try_into()
+                .expect("central offset"),
+        ) as usize;
+        bytes[central + 24..central + 28].copy_from_slice(&1_000_000u32.to_le_bytes());
+
+        let mut reader = MemoryReader { bytes, max_read: 7 };
+        let limits = ZipLimits {
+            max_entry_uncompressed_bytes: 100,
+            ..ZipLimits::default()
+        };
+        let error = scan_zip_with_limits(&mut reader, limits, |_| Ok(()))
+            .expect_err("oversized declared entry must fail");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn rejects_declared_total_uncompressed_size_over_budget() {
+        let mut reader = MemoryReader {
+            bytes: one_file_zip(),
+            max_read: 7,
+        };
+        let limits = ZipLimits {
+            max_total_uncompressed_bytes: 4,
+            ..ZipLimits::default()
+        };
+        let error = scan_zip_with_limits(&mut reader, limits, |_| Ok(()))
+            .expect_err("declared archive total must be bounded");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn stored_view_counts_actual_reads_and_stops_at_budget() {
+        let mut reader = MemoryReader {
+            bytes: one_file_zip(),
+            max_read: 7,
+        };
+        let mut entry = None;
+        scan_zip(&mut reader, |found| {
+            entry = Some(found.clone());
+            Ok(())
+        })
+        .expect("scan");
+
+        let limits = ZipLimits {
+            max_actual_read_bytes: 4,
+            ..ZipLimits::default()
+        };
+        let mut view = open_stored_entry_with_limits(&mut reader, &entry.expect("entry"), limits)
+            .expect("entry view");
+        let mut buffer = [0u8; 8];
+        let count = view.read_at(0, &mut buffer).expect("bounded read");
+        assert_eq!(count, 4);
+        assert_eq!(&buffer[..count], b"hell");
+        let error = view
+            .read_at(4, &mut buffer)
+            .expect_err("read budget must be enforced on subsequent reads");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn stored_open_enforces_declared_size_without_prior_scan() {
+        let mut reader = MemoryReader {
+            bytes: one_file_zip(),
+            max_read: 7,
+        };
+        let mut entry = None;
+        scan_zip(&mut reader, |found| {
+            entry = Some(found.clone());
+            Ok(())
+        })
+        .expect("scan");
+
+        let limits = ZipLimits {
+            max_entry_uncompressed_bytes: 4,
+            ..ZipLimits::default()
+        };
+        let error = open_stored_entry_with_limits(&mut reader, &entry.expect("entry"), limits)
+            .err()
+            .expect("stored entry declared size must be bounded");
+        assert_eq!(error.kind(), ErrorKind::Unsupported);
     }
 
     #[test]
